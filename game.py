@@ -171,8 +171,11 @@ while running:
             lava_particles.remove(particle)
 
     # Display score
-    score_text = font.render(f"Score: {score}", True, (0, 0, 0))
-    screen.blit(score_text, (10, 10))
+    # Display score in sakura pink at the top center
+    score_text = font.render(f"Score: {score}", True, (255, 182, 193))
+    text_rect = score_text.get_rect(center=(screen_width // 2, 20))  # y=20 from top
+    screen.blit(score_text, text_rect)
+
 
     pygame.display.flip()
     clock.tick(30)
