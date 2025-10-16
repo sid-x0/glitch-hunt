@@ -14,11 +14,11 @@ background_surface = pygame.surfarray.make_surface(arr.transpose(1,0,2))
 def draw_petal(surface, color, x, y, size, alpha, rotation):
     w, h = size, size*1.8
     points = [
-        (0.5*w, 0),              # top middle
-        (1.1*w, 0.3*h),          # upper right protrusion
-        (0.7*w, h),              # bottom right
-        (0.3*w, h),              # bottom left
-        (-0.1*w, 0.3*h)          # upper left protrusion
+        (0.5*w, 0),
+        (1.1*w, 0.3*h),
+        (0.7*w, h),
+        (0.3*w, h),
+        (-0.1*w, 0.3*h)
     ]
     rad = math.radians(rotation)
     rotated_points = []
@@ -46,10 +46,7 @@ class Petal:
         self.sway_amplitude = random.uniform(15, 35)
         self.sway_frequency = random.uniform(0.01, 0.03)
         self.phase = random.uniform(0, 2*math.pi)
-        if tree_area_index == 0:
-            self.color = (255, 182, 193)  # pink
-        else:
-            self.color = (255, 255, 255)  # white
+        self.color = (255, 182, 193) if tree_area_index == 0 else (255, 255, 255)
 
     def move(self):
         self.y += self.dy
@@ -84,25 +81,33 @@ screen_width, screen_height = 800, 600
 screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("Interactive Mount Fuji")
 clock = pygame.time.Clock()
+font = pygame.font.SysFont(None, 30)
 
 # Tree areas
 tree_areas = [
-    (0, 266, 0, 300),    # Left tree
-    (500, 650, 170, 350),# Right tree
-    (665, 800, 0, 100)   # Top-right compartment
+    (0, 266, 0, 300),
+    (500, 650, 170, 350),
+    (665, 800, 0, 100)
 ]
 
-# Volcano area for click detection
-# Clickable area for volcano eruption (around the tip)
-volcano_top_area = (390, 440, 260, 300)  # x_min, x_max, y_min, y_max
-  # x_min, x_max, y_min, y_max
-
-# Fixed volcano tip coordinates (center of image)
+# Volcano clickable area
+volcano_top_area = (390, 440, 260, 300)
 volcano_tip_x = 415
 volcano_tip_y = 280
 
+# Basket
+basket_width = 100
+basket_height = 30
+basket_x = 350
+basket_y = screen_height - basket_height - 10
+basket_speed = 7
+basket_color = (139, 69, 19)
+basket_alive = True
+
+# Game variables
 petals = []
 lava_particles = []
+score = 0
 
 running = True
 while running:
@@ -111,7 +116,6 @@ while running:
             running = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
             mx, my = event.pos
-            # Check trees
             clicked_tree = False
             for idx, tree_area in enumerate(tree_areas):
                 x_min, x_max, y_min, y_max = tree_area
@@ -120,19 +124,38 @@ while running:
                         petals.append(Petal(idx, tree_area))
                     clicked_tree = True
                     break
-            # Check volcano
             x_min, x_max, y_min, y_max = volcano_top_area
             if not clicked_tree and x_min <= mx <= x_max and y_min <= my <= y_max:
                 for _ in range(20):
                     lava_particles.append(LavaParticle(volcano_tip_x, volcano_tip_y))
 
+    keys = pygame.key.get_pressed()
+    if basket_alive:
+        if keys[pygame.K_LEFT]:
+            basket_x -= basket_speed
+        if keys[pygame.K_RIGHT]:
+            basket_x += basket_speed
+        basket_x = max(0, min(screen_width - basket_width, basket_x))
+
     screen.blit(background_surface, (0,0))
+
+    # Draw basket
+    if basket_alive:
+        pygame.draw.rect(screen, basket_color, (basket_x, basket_y, basket_width, basket_height))
+    else:
+        game_over_text = font.render("Basket destroyed by lava! lol ", True, (255, 0, 0))
+        screen.blit(game_over_text, (screen_width//2 - 120, screen_height//2))
 
     # Update and draw petals
     for petal in petals[:]:
         petal.move()
         draw_petal(screen, petal.color, petal.x, petal.y, petal.size, petal.alpha, petal.rotation)
-        if petal.y > screen_height or petal.alpha <= 0:
+        petal_rect = pygame.Rect(petal.x, petal.y, petal.size, petal.size)
+        basket_rect = pygame.Rect(basket_x, basket_y, basket_width, basket_height)
+        if basket_alive and petal_rect.colliderect(basket_rect):
+            petals.remove(petal)
+            score += 1
+        elif petal.y > screen_height or petal.alpha <= 0:
             petals.remove(petal)
 
     # Update and draw lava particles
@@ -141,8 +164,15 @@ while running:
         lava_surf = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
         pygame.draw.circle(lava_surf, (*particle.color, int(particle.alpha)), (int(particle.x), int(particle.y)), particle.size)
         screen.blit(lava_surf, (0,0))
+        lava_rect = pygame.Rect(particle.x, particle.y, particle.size, particle.size)
+        if basket_alive and lava_rect.colliderect(pygame.Rect(basket_x, basket_y, basket_width, basket_height)):
+            basket_alive = False
         if particle.y > screen_height or particle.alpha <= 0:
             lava_particles.remove(particle)
+
+    # Display score
+    score_text = font.render(f"Score: {score}", True, (0, 0, 0))
+    screen.blit(score_text, (10, 10))
 
     pygame.display.flip()
     clock.tick(30)
